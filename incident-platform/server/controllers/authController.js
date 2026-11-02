@@ -26,14 +26,18 @@ exports.register = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, token: signToken(user), user });
 });
 
-// POST /api/auth/login
 exports.login = asyncHandler(async (req, res) => {
   const email = str(req.body.email, "Email", { max: 120 }).toLowerCase();
   const password = str(req.body.password, "Password", { max: 128 });
-
-  const user = await User.findOne({ email }).select("+password");
-  // Same message for unknown email / wrong password / disabled account
-  if (!user || !user.isActive || !(await user.comparePassword(password))) {
+  const user = await User.findOne({ email }).select('+password');
+  if (!user || !user.isActive) {
+    throw new ApiError(401, "Wrong email or password");
+  }
+  if (!user.password) {
+    // This should never happen for seeded users
+    throw new ApiError(500, "User password not set");
+  }
+  if (!(await user.comparePassword(password))) {
     throw new ApiError(401, "Invalid email or password");
   }
 

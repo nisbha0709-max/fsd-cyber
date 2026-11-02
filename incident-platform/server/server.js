@@ -55,14 +55,32 @@ app.use("/api/incidents", require("./routes/incidentRoutes"));
 app.use("/api/evidence", require("./routes/evidenceRoutes"));
 app.use("/api/dashboard", require("./routes/dashboardRoutes"));
 app.use("/api/sla", require("./routes/slaRoutes"));
-
+app.use("/api/ai", require("./routes/aiRoutes"));
 app.use(notFound);
 app.use(errorHandler);
 
 // ---- Boot ----
 async function start() {
   await connectDB();
+  if (process.env.USE_DUMMY_DATA === "true") {
+    const User = require("./models/User");
+    const PASSWORD = "Password@123";
+    const USERS = [
+      { name: "Admin User", email: "admin@example.com", role: "admin" },
+      { name: "Anita Analyst", email: "analyst@example.com", role: "analyst" },
+      { name: "Ravi Responder", email: "responder1@example.com", role: "responder" },
+      { name: "Divya Responder", email: "responder2@example.com", role: "responder" },
+      { name: "Vikram Viewer", email: "viewer@example.com", role: "viewer" },
+    ];
+    for (const u of USERS) {
+      await User.create({ ...u, password: PASSWORD });
+    }
+    console.log(`🧪 Seeded ${USERS.length} demo users`);
+  }
   await SlaRule.seedDefaults(); // makes sure every severity has an SLA rule
+if (process.env.USE_DUMMY_DATA === "true") {
+  await require("./utils/seed").seedDemo();
+}
   realtime.init(server);
   slaChecker.start();
 

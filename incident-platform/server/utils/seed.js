@@ -2,6 +2,7 @@
 //         npm run seed:reset    (wipes users, incidents, evidence first)
 require("dotenv").config();
 const mongoose = require("mongoose");
+const faker = require("faker");
 const connectDB = require("../config/db");
 const User = require("../models/User");
 const Incident = require("../models/Incident");
@@ -28,8 +29,9 @@ const INCIDENTS = [
   { title: "Suspicious USB usage in lab", description: "Endpoint protection reported an unknown USB device on a lab machine.", type: "malware", severity: "low", affectedSystems: ["LAB-PC-12"] },
 ];
 
-(async () => {
-  await connectDB();
+// Exported function to seed demo data without exiting the process
+async function seedDemo() {
+  // connectDB is called by server initialization; not needed here
 
   if (process.argv.includes("--reset")) {
     await Promise.all([User.deleteMany(), Incident.deleteMany(), Evidence.deleteMany(), Counter.deleteMany()]);
@@ -38,15 +40,60 @@ const INCIDENTS = [
 
   await SlaRule.seedDefaults();
 
+  // Seed users
   for (const u of USERS) {
-    if (!(await User.findOne({ email: u.email }))) {
+    const existing = await User.findOne({ email: u.email });
+    if (!existing) {
       await User.create({ ...u, password: PASSWORD });
       console.log(`Created ${u.role}: ${u.email}`);
+    } else {
+      existing.password = PASSWORD;
+      await existing.save();
+      console.log(`Reset password for ${u.role}: ${u.email}`);
     }
   }
 
+  // Seed incidents (only if none exist)
   if ((await Incident.countDocuments()) === 0) {
     const analyst = await User.findOne({ email: "analyst@example.com" });
+    // Generate extra demo incidents for richer dashboard / SLA demo
+    async function createDemoIncidents(analyst) {
+      const severities = ["critical", "high", "medium", "low"];
+      const types = ["ransomware", "phishing", "unauthorized_access", "vulnerability", "malware"];
+      const statuses = ["open", "in_progress", "resolved", "closed"];
+      const responders = await User.find({ role: "responder", isActive: true }).select("_id name");
+      for (let i = 0; i < 12; i++) {
+        const daysAgo = Math.floor(Math.random() * 6);
+        const createdAt = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
+        const severity = faker.random.arrayElement(severities);
+        const type = faker.random.arrayElement(types);
+        const title = faker.lorem.sentence();
+        const description = faker.lorem.paragraph();
+        const affected = [faker.lorem.word()];
+        let assignee = null;
+        if (Math.random() < 0.7 && responders.length) {
+          assignee = faker.random.arrayElement(responders);
+        }
+        const incidentData = { title, description, type, severity, affectedSystems: affected };
+        const { incident } = await createIncidentRecord(incidentData, analyst, assignee?._id);
+        // Override timestamps for demo
+        incident.createdAt = createdAt;
+        incident.updatedAt = createdAt;
+        const rule = await SlaRule.findOne({ severity });
+        incident.responseDueAt = new Date(createdAt.getTime() + rule.responseMinutes * 60 * 1000);
+        incident.resolutionDueAt = new Date(createdAt.getTime() + rule.resolutionMinutes * 60 * 1000);
+        const status = faker.random.arrayElement(statuses);
+        incident.status = status;
+        if (status === "resolved" || status === "closed") {
+          const late = Math.random() < 0.5;
+          incident.resolvedAt = late
+            ? new Date(incident.resolutionDueAt.getTime() + 2 * 60 * 60 * 1000)
+            : new Date(incident.resolutionDueAt.getTime() - 1 * 60 * 60 * 1000);
+        }
+        await incident.save();
+      }
+    }
+    await createDemoIncidents(analyst);
     let last;
     for (const data of INCIDENTS) {
       const { incident } = await createIncidentRecord(data, analyst);
@@ -61,8 +108,20 @@ const INCIDENTS = [
   }
 
   console.log(`\nDone. Log in with any seeded email and password: ${PASSWORD}`);
-  await mongoose.disconnect();
-})().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+}
+
+module.exports = { seedDemo };
+
+// If executed directly via npm script, run seedDemo and then disconnect
+if (require.main === module) {
+  (async () => {
+    try {
+      await seedDemo();
+      await mongoose.disconnect();
+    } catch (e) {
+      console.error(e);
+      process.exit(1);
+    }
+  })();
+}
+// Duplicate seed block removed - original top-level await code eliminated to prevent runtime errors);
