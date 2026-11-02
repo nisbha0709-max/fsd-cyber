@@ -28,6 +28,9 @@ export default function IncidentDetail() {
   const [statusNote, setStatusNote] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  // AI suggestion state
+  const [aiSuggestion, setAiSuggestion] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -103,6 +106,19 @@ export default function IncidentDetail() {
     if (ok) {
       setStatusTarget(null);
       setStatusNote("");
+    }
+  }
+
+  // Fetch AI suggestion
+  async function fetchSuggestion() {
+    setAiLoading(true);
+    try {
+      const { data } = await api.get(`/ai/suggest/${id}`);
+      setAiSuggestion(data.suggestion);
+    } catch (e) {
+      toast.push(errMsg(e), "error");
+    } finally {
+      setAiLoading(false);
     }
   }
 
@@ -193,7 +209,21 @@ export default function IncidentDetail() {
                 <dt>Respond by</dt><dd>{fmtDate(inc.responseDueAt)}</dd>
                 <dt>Resolve by</dt><dd>{fmtDate(inc.resolutionDueAt)}</dd>
                 {inc.resolvedAt && (<><dt>Resolved</dt><dd>{fmtDate(inc.resolvedAt)}</dd></>)}
-                <dt>Deadline</dt><dd><SlaMeter incident={inc} /></dd>
+                <dt>Deadline</dt>
+                <dd>
+                  <SlaMeter incident={inc} />
+                  {role !== "viewer" && (
+                    <button className="btn btn-sm" onClick={fetchSuggestion} disabled={aiLoading}>
+                      {aiLoading ? "Generating…" : "Get AI Suggestion"}
+                    </button>
+              )}
+{aiSuggestion && (
+  <section className="panel">
+    <div className="panel-head"><h2>AI Suggestion</h2></div>
+    <div className="panel-body"><p>{aiSuggestion}</p></div>
+  </section>
+)}
+                </dd>
               </dl>
             </div>
           </section>

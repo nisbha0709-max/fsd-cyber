@@ -26,7 +26,8 @@ export default function Login() {
       else await register(form.name, form.email, form.password);
       navigate(from, { replace: true });
     } catch (err) {
-      setError(errMsg(err));
+      const msg = err.response?.data?.message || errMsg(err);
+      setError(msg);
     } finally {
       setBusy(false);
     }
@@ -93,11 +94,6 @@ export default function Login() {
             </button>
           </p>
 
-          <div className="demo-box">
-            After running <span className="mono">npm run seed</span> in the backend, sign in with{" "}
-            <span className="mono">analyst@example.com</span> and <span className="mono">Password@123</span>.
-            The first account created on a fresh database becomes the admin.
-          </div>
         </form>
       </section>
     </div>
